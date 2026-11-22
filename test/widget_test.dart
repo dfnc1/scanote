@@ -61,6 +61,41 @@ class _FlakyNotesApiService extends FakeApiService {
   }
 }
 
+/// Fake API untuk menguji kondisi error login, scan teks kosong, dan scan error 429.
+class _EdgeCaseApiService extends FakeApiService {
+  _EdgeCaseApiService({
+    this.loginError,
+    this.scanError,
+    this.emptyScanResult = false,
+  }) : super(simulatedDelay: Duration.zero, scanDelay: Duration.zero);
+
+  final String? loginError;
+  final String? scanError;
+  final bool emptyScanResult;
+
+  @override
+  Future<AuthResponse> login({
+    required String email,
+    required String password,
+  }) async {
+    if (loginError != null) {
+      throw ApiException(loginError!, statusCode: 401);
+    }
+    return super.login(email: email, password: password);
+  }
+
+  @override
+  Future<ScanResult> scanImage(File imageFile) async {
+    if (scanError != null) {
+      throw ApiException(scanError!, statusCode: 429);
+    }
+    if (emptyScanResult) {
+      return const ScanResult(title: '', content: '');
+    }
+    return super.scanImage(imageFile);
+  }
+}
+
 void main() {
   tearDown(Get.reset);
 
@@ -452,6 +487,110 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('5 dokumen'), findsOneWidget);
       expect(find.text('Rencana Proyek Akhir'), findsOneWidget);
+    });
+  });
+
+  group('Kondisi Error dan Kasus Khusus (Irisan 7)', () {
+    testWidgets('Login salah password menampilkan banner error tanpa pindah halaman',
+        (WidgetTester tester) async {
+      final api = _EdgeCaseApiService(loginError: 'Email atau password salah');
+      final storage = _InMemoryAuthStorage();
+
+      await tester.pumpWidget(ScanoteApp(apiService: api, authStorage: storage));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField).at(0), 'rani@mail.com');
+      await tester.enterText(find.byType(TextFormField).at(1), 'salah1234');
+      await tester.tap(find.text('Masuk'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Email atau password salah'), findsWidgets);
+      expect(find.text('Catatanmu,\nselalu dekat.'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Foto tanpa teks tetap lanjut ke Preview dengan peringatan untuk isi manual (T-13)',
+        (WidgetTester tester) async {
+      final api = _EdgeCaseApiService(emptyScanResult: true);
+      final storage = _InMemoryAuthStorage();
+      await storage.writeToken('saved-token');
+
+      Get.put<ScanController>(
+        ScanController(
+          apiService: api,
+          imagePicker: (_) async => File('kosong.jpg'),
+          imageCompressor: (file) async => file,
+        ),
+      );
+
+      await tester.pumpWidget(ScanoteApp(apiService: api, authStorage: storage));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Scan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Kamera'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Baca Teks'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Preview & Edit'), findsOneWidget);
+      expect(
+        find.textContaining('Teks tidak terbaca.'),
+        findsOneWidget,
+      );
+
+      // Pengguna tetap bisa mengisi manual lalu menyimpan.
+      await tester.enterText(find.byType(TextFormField).at(0), 'Catatan Manual');
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'Ditulis manual setelah foto tidak terbaca.',
+      );
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Catatanku'), findsOneWidget);
+      expect(find.text('Catatan Manual'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Kuota AI sibuk (429) menampilkan error jelas di halaman Scan (T-32)',
+        (WidgetTester tester) async {
+      final api = _EdgeCaseApiService(
+        scanError: 'Layanan AI sedang sibuk, coba lagi nanti.',
+      );
+      final storage = _InMemoryAuthStorage();
+      await storage.writeToken('saved-token');
+
+      Get.put<ScanController>(
+        ScanController(
+          apiService: api,
+          imagePicker: (_) async => File('catatan.jpg'),
+          imageCompressor: (file) async => file,
+        ),
+      );
+
+      await tester.pumpWidget(ScanoteApp(apiService: api, authStorage: storage));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Scan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Galeri'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Baca Teks'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Scan Catatan'), findsOneWidget);
+      expect(
+        find.text('Layanan AI sedang sibuk, coba lagi nanti.'),
+        findsWidgets,
+      );
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
     });
   });
 }

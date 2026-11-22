@@ -7,6 +7,7 @@ import '../controllers/auth_controller.dart';
 import '../utils/app_theme.dart';
 import '../utils/constants.dart';
 import '../utils/validators.dart';
+import '../widgets/error_banner.dart';
 import '../widgets/scanote_brand.dart';
 
 /// Halaman pendaftaran akun baru Scanote sesuai desain Figma.
@@ -181,7 +182,17 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
+
+                // Banner error terlihat bila pendaftaran gagal (misal email sudah terdaftar).
+                Obx(() {
+                  final error = _authController.errorMessage.value;
+                  if (error == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: ErrorBanner(message: error),
+                  );
+                }),
 
                 // Tombol Daftar dengan loading state.
                 Obx(() {
@@ -220,10 +231,11 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     TextButton(
                       onPressed: () {
+                        _authController.errorMessage.value = null;
                         if (Navigator.of(context).canPop()) {
                           Get.back<void>();
                         } else {
-                          Get.offNamed(AppRoutes.login);
+                          Get.offNamed<void>(AppRoutes.login);
                         }
                       },
                       child: const Text('Masuk'),

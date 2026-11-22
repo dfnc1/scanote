@@ -7,6 +7,7 @@ import '../controllers/auth_controller.dart';
 import '../utils/app_theme.dart';
 import '../utils/constants.dart';
 import '../utils/validators.dart';
+import '../widgets/error_banner.dart';
 import '../widgets/scanote_brand.dart';
 
 /// Halaman masuk akun Scanote sesuai desain Figma (mode gelap + aksen lime).
@@ -136,7 +137,17 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 20),
+
+                        // Banner error terlihat bila autentikasi ditolak atau gagal terhubung.
+                        Obx(() {
+                          final error = _authController.errorMessage.value;
+                          if (error == null) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: ErrorBanner(message: error),
+                          );
+                        }),
 
                         // Tombol utama Masuk dengan indikator loading di dalam tombol.
                         Obx(() {
@@ -174,7 +185,10 @@ class _LoginPageState extends State<LoginPage> {
                               style: textTheme.bodyMedium,
                             ),
                             TextButton(
-                              onPressed: () => Get.toNamed(AppRoutes.register),
+                              onPressed: () {
+                                _authController.errorMessage.value = null;
+                                Get.toNamed<void>(AppRoutes.register);
+                              },
                               child: const Text('Daftar'),
                             ),
                           ],

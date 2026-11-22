@@ -8,6 +8,7 @@ import '../controllers/note_controller.dart';
 import '../services/api_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/constants.dart';
+import '../widgets/error_banner.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/note_card.dart';
@@ -177,23 +178,38 @@ class _NoteListPageState extends State<NoteListPage> {
                   color: AppColors.primary,
                   backgroundColor: AppColors.surface,
                   onRefresh: _noteController.refreshNotes,
-                  child: ListView.separated(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-                    itemCount: _noteController.notes.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final note = _noteController.notes[index];
-                      return NoteCard(
-                        note: note,
-                        onTap: () => Get.toNamed<void>(
-                          AppRoutes.detail,
-                          arguments: note,
+                  child: Column(
+                    children: [
+                      if (error != null)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                          child: ErrorBanner(
+                            message: error,
+                            onRetry: () => _noteController.loadNotes(),
+                          ),
                         ),
-                      );
-                    },
+                      Expanded(
+                        child: ListView.separated(
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                          itemCount: _noteController.notes.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final note = _noteController.notes[index];
+                            return NoteCard(
+                              note: note,
+                              onTap: () => Get.toNamed<void>(
+                                AppRoutes.detail,
+                                arguments: note,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }),

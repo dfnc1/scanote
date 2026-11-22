@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../controllers/scan_controller.dart';
 import '../services/api_service.dart';
 import '../utils/app_theme.dart';
+import '../widgets/error_banner.dart';
 import '../widgets/loading_view.dart';
 
 /// Halaman ambil foto catatan (kamera/galeri) dan kirim ke backend untuk dibaca AI.
@@ -126,34 +127,7 @@ class ScanPage extends StatelessWidget {
 
                     if (error != null) ...[
                       const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.error),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.error_outline_rounded,
-                              color: AppColors.error,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                error,
-                                style: const TextStyle(
-                                  color: AppColors.error,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      ErrorBanner(message: error),
                     ],
 
                     const SizedBox(height: 16),

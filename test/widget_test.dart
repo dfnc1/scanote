@@ -1,12 +1,40 @@
 import 'dart:io';
 
+// GetX 4.7 masih memakai widget dari flutter/material.dart.
+// ignore: deprecated_member_use
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
+import 'package:scanote/controllers/auth_controller.dart';
 import 'package:scanote/main.dart';
 import 'package:scanote/models/note_model.dart';
 import 'package:scanote/models/user_model.dart';
 import 'package:scanote/services/fake_api_service.dart';
+
+/// Penyimpanan sesi di memori khusus pengujian agar tidak bergantung pada disk.
+class _InMemoryAuthStorage implements AuthStorage {
+  String? _token;
+  Map<String, dynamic>? _user;
+
+  @override
+  String? readToken() => _token;
+
+  @override
+  Future<void> writeToken(String token) async => _token = token;
+
+  @override
+  Map<String, dynamic>? readUser() => _user;
+
+  @override
+  Future<void> writeUser(Map<String, dynamic> userJson) async => _user = userJson;
+
+  @override
+  Future<void> clear() async {
+    _token = null;
+    _user = null;
+  }
+}
 
 void main() {
   tearDown(Get.reset);
@@ -92,25 +120,113 @@ void main() {
     });
   });
 
-  testWidgets('Halaman placeholder fondasi tampil dan tombol uji dummy bekerja',
-      (WidgetTester tester) async {
-    final fakeApi = FakeApiService(
-      simulatedDelay: Duration.zero,
-      scanDelay: Duration.zero,
-    );
+  group('Alur Autentikasi (Irisan 2)', () {
+    testWidgets('Validasi login tampil dan login sukses menuju placeholder /notes lalu logout',
+        (WidgetTester tester) async {
+      final fakeApi = FakeApiService(
+        simulatedDelay: Duration.zero,
+        scanDelay: Duration.zero,
+      );
+      final storage = _InMemoryAuthStorage();
 
-    await tester.pumpWidget(ScanoteApp(apiService: fakeApi));
+      await tester.pumpWidget(
+        ScanoteApp(apiService: fakeApi, authStorage: storage),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('scanote'), findsOneWidget);
-    expect(find.text('Fondasi Siap.'), findsOneWidget);
-    expect(find.text('Uji Muat Data Dummy'), findsOneWidget);
+      // Pastikan mulai di halaman Login.
+      expect(find.text('Catatanmu,\nselalu dekat.'), findsOneWidget);
 
-    await tester.tap(find.text('Uji Muat Data Dummy'));
-    await tester.pumpAndSettle();
+      // Submit form kosong -> muncul pesan validasi bahasa Indonesia.
+      await tester.tap(find.text('Masuk'));
+      await tester.pumpAndSettle();
+      expect(find.text('Format email tidak valid'), findsOneWidget);
+      expect(find.text('Password minimal 8 karakter'), findsOneWidget);
 
-    expect(
-      find.text('Berhasil memuat 5 catatan dummy dari ApiService.'),
-      findsOneWidget,
-    );
+      // Isi email dan password valid lalu masuk.
+      await tester.enterText(
+        find.byType(TextFormField).at(0),
+        'rani@mail.com',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'rahasia123',
+      );
+      await tester.tap(find.text('Masuk'));
+      await tester.pumpAndSettle();
+
+      // Berhasil masuk ke placeholder /notes dan token tersimpan.
+      expect(find.text('Catatanku'), findsOneWidget);
+      expect(find.text('rani@mail.com'), findsOneWidget);
+      expect(storage.readToken(), isNotNull);
+
+      // Logout kembali ke halaman Login dan token terhapus.
+      await tester.tap(find.text('Keluar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Catatanmu,\nselalu dekat.'), findsOneWidget);
+      expect(storage.readToken(), isNull);
+    });
+
+    testWidgets('Navigasi ke Daftar, cek konfirmasi password, dan daftar berhasil ke /notes',
+        (WidgetTester tester) async {
+      final fakeApi = FakeApiService(
+        simulatedDelay: Duration.zero,
+        scanDelay: Duration.zero,
+      );
+      final storage = _InMemoryAuthStorage();
+
+      await tester.pumpWidget(
+        ScanoteApp(apiService: fakeApi, authStorage: storage),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Daftar'));
+      await tester.tap(find.text('Daftar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Buat Akun'), findsOneWidget);
+
+      // Isi form dengan konfirmasi password tidak cocok.
+      await tester.enterText(find.byType(TextFormField).at(0), 'Rani Putri');
+      await tester.enterText(find.byType(TextFormField).at(1), 'rani@mail.com');
+      await tester.enterText(find.byType(TextFormField).at(2), 'rahasia123');
+      await tester.enterText(find.byType(TextFormField).at(3), 'berbeda123');
+
+      await tester.ensureVisible(find.text('Daftar'));
+      await tester.tap(find.text('Daftar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Password tidak cocok'), findsOneWidget);
+
+      // Perbaiki konfirmasi password lalu submit.
+      await tester.enterText(find.byType(TextFormField).at(3), 'rahasia123');
+      await tester.ensureVisible(find.text('Daftar'));
+      await tester.tap(find.text('Daftar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Catatanku'), findsOneWidget);
+      expect(find.text('Rani Putri'), findsOneWidget);
+    });
+
+    testWidgets('Sesi tersimpan langsung membuka rute /notes saat aplikasi dibuka ulang',
+        (WidgetTester tester) async {
+      final fakeApi = FakeApiService(
+        simulatedDelay: Duration.zero,
+        scanDelay: Duration.zero,
+      );
+      final storage = _InMemoryAuthStorage();
+      await storage.writeToken('saved-token');
+      await storage.writeUser({
+        'id': 1,
+        'name': 'Rani',
+        'email': 'rani@mail.com',
+      });
+
+      await tester.pumpWidget(
+        ScanoteApp(apiService: fakeApi, authStorage: storage),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Catatanku'), findsOneWidget);
+      expect(find.text('Rani'), findsOneWidget);
+    });
   });
 }

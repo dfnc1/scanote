@@ -19,3 +19,15 @@ class AppConstants {
   static const String tokenStorageKey = 'auth_token';
   static const String userStorageKey = 'auth_user';
 }
+
+/// Nama rute navigasi GetX yang dipakai di seluruh aplikasi.
+class AppRoutes {
+  AppRoutes._();
+
+  static const String login = '/login';
+  static const String register = '/register';
+  static const String notes = '/notes';
+  static const String scan = '/scan';
+  static const String preview = '/preview';
+  static const String detail = '/detail';
+}

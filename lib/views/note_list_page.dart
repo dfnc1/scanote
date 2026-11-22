@@ -132,16 +132,10 @@ class NoteListPage extends StatelessWidget {
                       final note = noteController.notes[index];
                       return NoteCard(
                         note: note,
-                        onTap: () {
-                          // TODO(irisan-5): arahkan ke NoteDetailPage.
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Detail "${note.title}" tersedia di Irisan 5.',
-                              ),
-                            ),
-                          );
-                        },
+                        onTap: () => Get.toNamed<void>(
+                          AppRoutes.detail,
+                          arguments: note,
+                        ),
                       );
                     },
                   ),

@@ -355,4 +355,66 @@ void main() {
       await tester.pumpAndSettle();
     });
   });
+
+  group('Detail, Ubah, dan Hapus Catatan (Irisan 5)', () {
+    testWidgets('Buka detail, edit catatan via PreviewPage, batal hapus, lalu konfirmasi hapus',
+        (WidgetTester tester) async {
+      final api = FakeApiService(
+        simulatedDelay: Duration.zero,
+        scanDelay: Duration.zero,
+      );
+      final storage = _InMemoryAuthStorage();
+      await storage.writeToken('saved-token');
+
+      await tester.pumpWidget(ScanoteApp(apiService: api, authStorage: storage));
+      await tester.pumpAndSettle();
+
+      // Buka detail catatan pertama (T-19).
+      await tester.tap(find.text('Rencana Proyek Akhir'));
+      await tester.pumpAndSettle();
+      expect(find.text('Detail Catatan'), findsOneWidget);
+      expect(find.text('Edit catatan'), findsOneWidget);
+
+      // Edit catatan menggunakan PreviewPage mode edit (T-20).
+      await tester.tap(find.text('Edit catatan'));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit Catatan'), findsOneWidget);
+
+      await tester.enterText(
+        find.byType(TextFormField).at(0),
+        'Rencana Proyek Akhir Revisi',
+      );
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detail Catatan'), findsOneWidget);
+      expect(find.text('Rencana Proyek Akhir Revisi'), findsOneWidget);
+
+      // Hapus dibatalkan -> catatan tetap ada (T-21).
+      await tester.tap(find.text('Hapus'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hapus catatan?'), findsOneWidget);
+      await tester.tap(find.text('Batal'));
+      await tester.pumpAndSettle();
+      expect(find.text('Rencana Proyek Akhir Revisi'), findsOneWidget);
+
+      // Hapus dikonfirmasi -> kembali ke daftar dan jumlah berkurang (T-22).
+      await tester.tap(find.text('Hapus'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Hapus'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Catatanku'), findsOneWidget);
+      expect(find.text('Rencana Proyek Akhir Revisi'), findsNothing);
+      expect(find.text('4 dokumen'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+  });
 }

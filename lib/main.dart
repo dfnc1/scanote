@@ -9,6 +9,7 @@ import 'services/api_service.dart';
 import 'utils/app_theme.dart';
 import 'utils/constants.dart';
 import 'views/login_page.dart';
+import 'views/note_detail_page.dart';
 import 'views/note_list_page.dart';
 import 'views/preview_page.dart';
 import 'views/register_page.dart';
@@ -101,6 +102,10 @@ class ScanoteApp extends StatelessWidget {
         GetPage(
           name: AppRoutes.preview,
           page: () => const PreviewPage(),
+        ),
+        GetPage(
+          name: AppRoutes.detail,
+          page: () => const NoteDetailPage(),
         ),
       ],
     );

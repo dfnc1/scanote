@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
 import 'package:scanote/controllers/auth_controller.dart';
+import 'package:scanote/controllers/scan_controller.dart';
 import 'package:scanote/main.dart';
 import 'package:scanote/models/note_model.dart';
 import 'package:scanote/models/user_model.dart';
@@ -281,6 +282,77 @@ void main() {
 
       expect(find.text('Rencana Proyek Akhir'), findsOneWidget);
       expect(find.text('5 dokumen'), findsOneWidget);
+    });
+  });
+
+  group('Alur Scan sampai Simpan (Irisan 4)', () {
+    testWidgets('Tombol Baca Teks nonaktif sebelum ada foto, lalu scan -> preview -> simpan',
+        (WidgetTester tester) async {
+      final api = FakeApiService(
+        simulatedDelay: Duration.zero,
+        scanDelay: Duration.zero,
+      );
+      final storage = _InMemoryAuthStorage();
+      await storage.writeToken('saved-token');
+
+      Get.put<ScanController>(
+        ScanController(
+          apiService: api,
+          imagePicker: (_) async => File('catatan_uji.jpg'),
+          imageCompressor: (file) async => file,
+        ),
+      );
+
+      await tester.pumpWidget(ScanoteApp(apiService: api, authStorage: storage));
+      await tester.pumpAndSettle();
+
+      // Buka halaman Scan dari tombol + Scan.
+      await tester.tap(find.text('Scan'));
+      await tester.pumpAndSettle();
+      expect(find.text('Scan Catatan'), findsOneWidget);
+
+      // Pastikan tombol Baca Teks nonaktif sebelum foto dipilih (T-10).
+      final bacaButtonBefore = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Baca Teks'),
+      );
+      expect(bacaButtonBefore.onPressed, isNull);
+
+      // Pilih foto dari Galeri -> tombol Baca Teks aktif.
+      await tester.tap(find.text('Galeri'));
+      await tester.pumpAndSettle();
+      expect(find.text('Foto siap dipindai'), findsOneWidget);
+
+      final bacaButtonAfter = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Baca Teks'),
+      );
+      expect(bacaButtonAfter.onPressed, isNotNull);
+
+      // Baca teks -> masuk ke Preview & Edit.
+      await tester.tap(find.text('Baca Teks'));
+      await tester.pumpAndSettle();
+      expect(find.text('Preview & Edit'), findsOneWidget);
+
+      // Kosongkan judul -> validasi "Judul wajib diisi" (T-16).
+      await tester.enterText(find.byType(TextFormField).at(0), '');
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+      expect(find.text('Judul wajib diisi'), findsOneWidget);
+
+      // Isi judul baru -> simpan -> kembali ke /notes dengan jumlah catatan bertambah.
+      await tester.enterText(
+        find.byType(TextFormField).at(0),
+        'Catatan Fisika Dasar',
+      );
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Catatanku'), findsOneWidget);
+      expect(find.text('Catatan Fisika Dasar'), findsOneWidget);
+      expect(find.text('6 dokumen'), findsOneWidget);
+
+      // Tunggu timer snackbar GetX selesai agar tidak menyisakan pending timer di test.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
     });
   });
 }

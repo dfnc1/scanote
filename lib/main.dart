@@ -10,7 +10,9 @@ import 'utils/app_theme.dart';
 import 'utils/constants.dart';
 import 'views/login_page.dart';
 import 'views/note_list_page.dart';
+import 'views/preview_page.dart';
 import 'views/register_page.dart';
+import 'views/scan_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -91,6 +93,14 @@ class ScanoteApp extends StatelessWidget {
         GetPage(
           name: AppRoutes.notes,
           page: () => const NoteListPage(),
+        ),
+        GetPage(
+          name: AppRoutes.scan,
+          page: () => const ScanPage(),
+        ),
+        GetPage(
+          name: AppRoutes.preview,
+          page: () => const PreviewPage(),
         ),
       ],
     );

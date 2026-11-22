@@ -7,6 +7,7 @@ import '../controllers/auth_controller.dart';
 import '../controllers/note_controller.dart';
 import '../services/api_service.dart';
 import '../utils/app_theme.dart';
+import '../utils/constants.dart';
 import '../widgets/error_view.dart';
 import '../widgets/loading_view.dart';
 import '../widgets/note_card.dart';
@@ -162,12 +163,7 @@ class NoteListPage extends StatelessWidget {
   }
 
   void _openScanPlaceholder(BuildContext context) {
-    // TODO(irisan-4): arahkan ke ScanPage.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Halaman Scan akan tersedia di Irisan 4.'),
-      ),
-    );
+    Get.toNamed<void>(AppRoutes.scan);
   }
 }
 

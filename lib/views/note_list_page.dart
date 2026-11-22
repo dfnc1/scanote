@@ -13,23 +13,46 @@ import '../widgets/loading_view.dart';
 import '../widgets/note_card.dart';
 import '../widgets/scanote_brand.dart';
 
-/// Halaman utama daftar catatan pengguna sesuai desain Figma (Catatanku.png).
-class NoteListPage extends StatelessWidget {
+/// Halaman utama daftar catatan pengguna dengan pencarian debounce sesuai desain Figma.
+class NoteListPage extends StatefulWidget {
   const NoteListPage({super.key});
 
-  NoteController _ensureNoteController() {
-    if (Get.isRegistered<NoteController>()) {
-      return Get.find<NoteController>();
-    }
-    return Get.put<NoteController>(
-      NoteController(apiService: Get.find<ApiService>()),
+  @override
+  State<NoteListPage> createState() => _NoteListPageState();
+}
+
+class _NoteListPageState extends State<NoteListPage> {
+  late final TextEditingController _searchController;
+  late final NoteController _noteController;
+
+  @override
+  void initState() {
+    super.initState();
+    _noteController = Get.isRegistered<NoteController>()
+        ? Get.find<NoteController>()
+        : Get.put<NoteController>(
+            NoteController(apiService: Get.find<ApiService>()),
+          );
+    _searchController = TextEditingController(
+      text: _noteController.searchQuery.value,
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _clearSearch() async {
+    _searchController.clear();
+    FocusScope.of(context).unfocus();
+    await _noteController.clearSearch();
   }
 
   @override
   Widget build(BuildContext context) {
     final authController = Get.find<AuthController>();
-    final noteController = _ensureNoteController();
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
@@ -72,11 +95,11 @@ class NoteListPage extends StatelessWidget {
                     child: Text('Catatanku', style: textTheme.headlineLarge),
                   ),
                   Obx(() {
-                    if (noteController.isLoading.value) {
+                    if (_noteController.isLoading.value) {
                       return const SizedBox.shrink();
                     }
                     return Text(
-                      '${noteController.notes.length} dokumen',
+                      '${_noteController.notes.length} dokumen',
                       style: textTheme.bodyMedium,
                     );
                   }),
@@ -84,36 +107,67 @@ class NoteListPage extends StatelessWidget {
               ),
             ),
 
+            // Kolom pencarian catatan (debounce 400 ms di NoteController).
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+              child: Obx(() {
+                final hasQuery = _noteController.searchQuery.value.isNotEmpty;
+                return TextField(
+                  controller: _searchController,
+                  textInputAction: TextInputAction.search,
+                  onChanged: _noteController.search,
+                  decoration: InputDecoration(
+                    hintText: 'Cari judul atau isi catatan',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: hasQuery
+                        ? IconButton(
+                            tooltip: 'Hapus pencarian',
+                            onPressed: _clearSearch,
+                            icon: const Icon(Icons.close_rounded),
+                          )
+                        : null,
+                  ),
+                );
+              }),
+            ),
+
             // Area konten daftar catatan dengan state loading, error, kosong, dan isi.
             Expanded(
               child: Obx(() {
-                if (noteController.isLoading.value) {
+                if (_noteController.isLoading.value) {
                   return const LoadingView(message: 'Memuat daftar catatan...');
                 }
 
-                final error = noteController.errorMessage.value;
-                if (error != null && noteController.notes.isEmpty) {
+                final error = _noteController.errorMessage.value;
+                if (error != null && _noteController.notes.isEmpty) {
                   return ErrorView(
                     message: error,
-                    onRetry: () => noteController.loadNotes(),
+                    onRetry: () => _noteController.loadNotes(),
                   );
                 }
 
-                if (noteController.notes.isEmpty) {
+                if (_noteController.notes.isEmpty) {
+                  final isSearching = _noteController.isSearching;
                   return RefreshIndicator(
                     color: AppColors.primary,
                     backgroundColor: AppColors.surface,
-                    onRefresh: noteController.refreshNotes,
+                    onRefresh: _noteController.refreshNotes,
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
-                        vertical: 48,
+                        vertical: 40,
                       ),
                       children: [
-                        _EmptyNotesView(
-                          onScanTap: () => _openScanPlaceholder(context),
-                        ),
+                        if (isSearching)
+                          _EmptySearchView(
+                            query: _noteController.searchQuery.value.trim(),
+                            onReset: _clearSearch,
+                          )
+                        else
+                          _EmptyNotesView(
+                            onScanTap: () => Get.toNamed<void>(AppRoutes.scan),
+                          ),
                       ],
                     ),
                   );
@@ -122,14 +176,16 @@ class NoteListPage extends StatelessWidget {
                 return RefreshIndicator(
                   color: AppColors.primary,
                   backgroundColor: AppColors.surface,
-                  onRefresh: noteController.refreshNotes,
+                  onRefresh: _noteController.refreshNotes,
                   child: ListView.separated(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-                    itemCount: noteController.notes.length,
+                    itemCount: _noteController.notes.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
-                      final note = noteController.notes[index];
+                      final note = _noteController.notes[index];
                       return NoteCard(
                         note: note,
                         onTap: () => Get.toNamed<void>(
@@ -148,16 +204,12 @@ class NoteListPage extends StatelessWidget {
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 16),
         child: ElevatedButton.icon(
-          onPressed: () => _openScanPlaceholder(context),
+          onPressed: () => Get.toNamed<void>(AppRoutes.scan),
           icon: const Icon(Icons.add_rounded, size: 22),
           label: const Text('Scan'),
         ),
       ),
     );
-  }
-
-  void _openScanPlaceholder(BuildContext context) {
-    Get.toNamed<void>(AppRoutes.scan);
   }
 }
 
@@ -191,10 +243,7 @@ class _EmptyNotesView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Text(
-              'Belum ada catatan',
-              style: textTheme.titleMedium,
-            ),
+            Text('Belum ada catatan', style: textTheme.titleMedium),
             const SizedBox(height: 8),
             Text(
               'Pindai catatan tulisan tanganmu agar tersimpan rapi dan mudah dicari kapan saja.',
@@ -210,6 +259,64 @@ class _EmptyNotesView extends StatelessWidget {
                 size: 18,
               ),
               label: const Text('Mulai Scan Pertama'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptySearchView extends StatelessWidget {
+  const _EmptySearchView({
+    required this.query,
+    required this.onReset,
+  });
+
+  final String query;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceInput,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Icon(
+                Icons.search_off_rounded,
+                color: AppColors.textSecondary,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Catatan tidak ditemukan', style: textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              'Tidak ada catatan yang cocok dengan kata kunci "$query".',
+              textAlign: TextAlign.center,
+              style: textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: onReset,
+              icon: const Icon(
+                Icons.restart_alt_rounded,
+                color: AppColors.primary,
+                size: 18,
+              ),
+              label: const Text('Tampilkan semua'),
             ),
           ],
         ),

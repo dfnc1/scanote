@@ -417,4 +417,41 @@ void main() {
       await tester.pumpAndSettle();
     });
   });
+
+  group('Pencarian Catatan dengan Debounce (Irisan 6)', () {
+    testWidgets('Cari ada hasil, cari tanpa hasil, lalu hapus pencarian menampilkan semua',
+        (WidgetTester tester) async {
+      final api = FakeApiService(
+        simulatedDelay: Duration.zero,
+        scanDelay: Duration.zero,
+      );
+      final storage = _InMemoryAuthStorage();
+      await storage.writeToken('saved-token');
+
+      await tester.pumpWidget(ScanoteApp(apiService: api, authStorage: storage));
+      await tester.pumpAndSettle();
+      expect(find.text('5 dokumen'), findsOneWidget);
+
+      // Cari kata yang ada di isi catatan (T-23).
+      await tester.enterText(find.byType(TextField), 'normalisasi');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      expect(find.text('Catatan Basis Data'), findsOneWidget);
+      expect(find.text('1 dokumen'), findsOneWidget);
+
+      // Cari kata yang tidak ada -> tampil pesan hasil kosong (T-24).
+      await tester.enterText(find.byType(TextField), 'katatidakada999');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      expect(find.text('Catatan tidak ditemukan'), findsOneWidget);
+      expect(find.text('0 dokumen'), findsOneWidget);
+
+      // Hapus kata pencarian -> semua catatan tampil kembali (T-25).
+      await tester.tap(find.text('Tampilkan semua'));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      expect(find.text('5 dokumen'), findsOneWidget);
+      expect(find.text('Rencana Proyek Akhir'), findsOneWidget);
+    });
+  });
 }

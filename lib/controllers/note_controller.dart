@@ -19,10 +19,37 @@ class NoteController extends GetxController {
   final errorMessage = RxnString();
   final searchQuery = ''.obs;
 
+  Worker? _searchWorker;
+
+  bool get isSearching => searchQuery.value.trim().isNotEmpty;
+
   @override
   void onInit() {
     super.onInit();
+    // Debounce 400 ms agar pencarian tidak memanggil API pada setiap huruf.
+    _searchWorker = debounce<String>(
+      searchQuery,
+      (value) => loadNotes(query: value),
+      time: const Duration(milliseconds: 400),
+    );
     loadNotes();
+  }
+
+  @override
+  void onClose() {
+    _searchWorker?.dispose();
+    super.onClose();
+  }
+
+  /// Memperbarui kata kunci pencarian (akan diproses otomatis setelah debounce 400 ms).
+  void search(String query) {
+    searchQuery.value = query;
+  }
+
+  /// Mengosongkan pencarian dan langsung memuat ulang seluruh catatan.
+  Future<void> clearSearch() async {
+    searchQuery.value = '';
+    await loadNotes(query: '');
   }
 
   /// Memuat daftar catatan milik pengguna aktif dari API.

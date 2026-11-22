@@ -9,7 +9,7 @@ import 'services/api_service.dart';
 import 'utils/app_theme.dart';
 import 'utils/constants.dart';
 import 'views/login_page.dart';
-import 'views/notes_placeholder_page.dart';
+import 'views/note_list_page.dart';
 import 'views/register_page.dart';
 
 Future<void> main() async {
@@ -54,10 +54,12 @@ class ScanoteApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedApi = apiService ??
-        (Get.isRegistered<ApiService>()
-            ? Get.find<ApiService>()
-            : Get.put<ApiService>(createApiService(), permanent: true));
+    final resolvedApi = Get.isRegistered<ApiService>()
+        ? Get.find<ApiService>()
+        : Get.put<ApiService>(
+            apiService ?? createApiService(),
+            permanent: true,
+          );
 
     final authController = Get.isRegistered<AuthController>()
         ? Get.find<AuthController>()
@@ -88,7 +90,7 @@ class ScanoteApp extends StatelessWidget {
         ),
         GetPage(
           name: AppRoutes.notes,
-          page: () => const NotesPlaceholderPage(),
+          page: () => const NoteListPage(),
         ),
       ],
     );

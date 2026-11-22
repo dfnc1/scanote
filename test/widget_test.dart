@@ -10,6 +10,7 @@ import 'package:scanote/controllers/auth_controller.dart';
 import 'package:scanote/main.dart';
 import 'package:scanote/models/note_model.dart';
 import 'package:scanote/models/user_model.dart';
+import 'package:scanote/services/api_service.dart';
 import 'package:scanote/services/fake_api_service.dart';
 
 /// Penyimpanan sesi di memori khusus pengujian agar tidak bergantung pada disk.
@@ -33,6 +34,29 @@ class _InMemoryAuthStorage implements AuthStorage {
   Future<void> clear() async {
     _token = null;
     _user = null;
+  }
+}
+
+/// Fake API khusus untuk mensimulasikan kegagalan server lalu pemulihan saat Coba lagi.
+class _FlakyNotesApiService extends FakeApiService {
+  _FlakyNotesApiService({this.failOnce = false, this.emptyList = false})
+      : super(simulatedDelay: Duration.zero, scanDelay: Duration.zero);
+
+  bool failOnce;
+  final bool emptyList;
+
+  @override
+  Future<List<NoteModel>> getNotes({String? query}) async {
+    if (failOnce) {
+      failOnce = false;
+      throw const ApiException(
+        'Tidak dapat terhubung ke server. Periksa koneksi.',
+      );
+    }
+    if (emptyList) {
+      return const [];
+    }
+    return super.getNotes(query: query);
   }
 }
 
@@ -121,7 +145,7 @@ void main() {
   });
 
   group('Alur Autentikasi (Irisan 2)', () {
-    testWidgets('Validasi login tampil dan login sukses menuju placeholder /notes lalu logout',
+    testWidgets('Validasi login tampil dan login sukses menuju /notes lalu logout',
         (WidgetTester tester) async {
       final fakeApi = FakeApiService(
         simulatedDelay: Duration.zero,
@@ -134,16 +158,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Pastikan mulai di halaman Login.
       expect(find.text('Catatanmu,\nselalu dekat.'), findsOneWidget);
 
-      // Submit form kosong -> muncul pesan validasi bahasa Indonesia.
       await tester.tap(find.text('Masuk'));
       await tester.pumpAndSettle();
       expect(find.text('Format email tidak valid'), findsOneWidget);
       expect(find.text('Password minimal 8 karakter'), findsOneWidget);
 
-      // Isi email dan password valid lalu masuk.
       await tester.enterText(
         find.byType(TextFormField).at(0),
         'rani@mail.com',
@@ -155,12 +176,10 @@ void main() {
       await tester.tap(find.text('Masuk'));
       await tester.pumpAndSettle();
 
-      // Berhasil masuk ke placeholder /notes dan token tersimpan.
       expect(find.text('Catatanku'), findsOneWidget);
-      expect(find.text('rani@mail.com'), findsOneWidget);
+      expect(find.text('5 dokumen'), findsOneWidget);
       expect(storage.readToken(), isNotNull);
 
-      // Logout kembali ke halaman Login dan token terhapus.
       await tester.tap(find.text('Keluar'));
       await tester.pumpAndSettle();
       expect(find.text('Catatanmu,\nselalu dekat.'), findsOneWidget);
@@ -185,7 +204,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Buat Akun'), findsOneWidget);
 
-      // Isi form dengan konfirmasi password tidak cocok.
       await tester.enterText(find.byType(TextFormField).at(0), 'Rani Putri');
       await tester.enterText(find.byType(TextFormField).at(1), 'rani@mail.com');
       await tester.enterText(find.byType(TextFormField).at(2), 'rahasia123');
@@ -196,14 +214,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Password tidak cocok'), findsOneWidget);
 
-      // Perbaiki konfirmasi password lalu submit.
       await tester.enterText(find.byType(TextFormField).at(3), 'rahasia123');
       await tester.ensureVisible(find.text('Daftar'));
       await tester.tap(find.text('Daftar'));
       await tester.pumpAndSettle();
 
       expect(find.text('Catatanku'), findsOneWidget);
-      expect(find.text('Rani Putri'), findsOneWidget);
+      expect(find.text('Rencana Proyek Akhir'), findsOneWidget);
     });
 
     testWidgets('Sesi tersimpan langsung membuka rute /notes saat aplikasi dibuka ulang',
@@ -226,7 +243,44 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Catatanku'), findsOneWidget);
-      expect(find.text('Rani'), findsOneWidget);
+      expect(find.text('Rencana Proyek Akhir'), findsOneWidget);
+    });
+  });
+
+  group('Daftar Catatan (Irisan 3)', () {
+    testWidgets('State kosong menampilkan "Belum ada catatan"',
+        (WidgetTester tester) async {
+      final api = _FlakyNotesApiService(emptyList: true);
+      final storage = _InMemoryAuthStorage();
+      await storage.writeToken('saved-token');
+
+      await tester.pumpWidget(ScanoteApp(apiService: api, authStorage: storage));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Belum ada catatan'), findsOneWidget);
+      expect(find.text('0 dokumen'), findsOneWidget);
+    });
+
+    testWidgets('State error menampilkan pesan dan tombol Coba lagi memulihkan data',
+        (WidgetTester tester) async {
+      final api = _FlakyNotesApiService(failOnce: true);
+      final storage = _InMemoryAuthStorage();
+      await storage.writeToken('saved-token');
+
+      await tester.pumpWidget(ScanoteApp(apiService: api, authStorage: storage));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Tidak dapat terhubung ke server. Periksa koneksi.'),
+        findsOneWidget,
+      );
+      expect(find.text('Coba lagi'), findsOneWidget);
+
+      await tester.tap(find.text('Coba lagi'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Rencana Proyek Akhir'), findsOneWidget);
+      expect(find.text('5 dokumen'), findsOneWidget);
     });
   });
 }

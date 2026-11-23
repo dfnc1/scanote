@@ -61,13 +61,7 @@ class _NoteListPageState extends State<NoteListPage> {
         title: const ScanoteBrand(compact: true),
         actions: [
           TextButton.icon(
-            onPressed: () {
-              // Hapus controller catatan agar data akun sebelumnya tidak terbawa saat ganti akun.
-              if (Get.isRegistered<NoteController>()) {
-                Get.delete<NoteController>();
-              }
-              authController.logout();
-            },
+            onPressed: authController.logout,
             icon: const Icon(
               Icons.logout_rounded,
               size: 18,

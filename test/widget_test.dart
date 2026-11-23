@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
 import 'package:scanote/controllers/auth_controller.dart';
+import 'package:scanote/controllers/note_controller.dart';
 import 'package:scanote/controllers/scan_controller.dart';
 import 'package:scanote/main.dart';
 import 'package:scanote/models/note_model.dart';
@@ -588,6 +589,42 @@ void main() {
         find.text('Layanan AI sedang sibuk, coba lagi nanti.'),
         findsWidgets,
       );
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Logout otomatis karena sesi berakhir (401) membersihkan NoteController dan ScanController (T-28)',
+        (WidgetTester tester) async {
+      final api = FakeApiService(
+        simulatedDelay: Duration.zero,
+        scanDelay: Duration.zero,
+      );
+      final storage = _InMemoryAuthStorage();
+      await storage.writeToken('expired-token');
+
+      Get.put<ScanController>(
+        ScanController(
+          apiService: api,
+          imagePicker: (_) async => File('catatan_lama.jpg'),
+          imageCompressor: (file) async => file,
+        ),
+      );
+
+      await tester.pumpWidget(ScanoteApp(apiService: api, authStorage: storage));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Catatanku'), findsOneWidget);
+      expect(Get.isRegistered<NoteController>(), isTrue);
+      expect(Get.isRegistered<ScanController>(), isTrue);
+
+      await Get.find<AuthController>().logout(sessionExpired: true);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Catatanmu,\nselalu dekat.'), findsOneWidget);
+      expect(storage.readToken(), isNull);
+      expect(Get.isRegistered<NoteController>(), isFalse);
+      expect(Get.isRegistered<ScanController>(), isFalse);
 
       await tester.pump(const Duration(seconds: 4));
       await tester.pumpAndSettle();

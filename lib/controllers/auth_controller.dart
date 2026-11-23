@@ -8,6 +8,8 @@ import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/constants.dart';
+import 'note_controller.dart';
+import 'scan_controller.dart';
 
 /// Abstraksi penyimpanan sesi lokal agar mudah diuji dan tetap memakai GetStorage saat produksi.
 abstract class AuthStorage {
@@ -64,6 +66,7 @@ class AuthController extends GetxController {
   final user = Rxn<UserModel>();
   final isLoading = false.obs;
   final errorMessage = RxnString();
+  bool _isLoggingOut = false;
 
   /// Memeriksa apakah token sesi masih tersimpan saat aplikasi dibuka.
   bool checkSession() {
@@ -132,17 +135,33 @@ class AuthController extends GetxController {
   }
 
   Future<void> logout({bool sessionExpired = false}) async {
-    await _storage.clear();
-    user.value = null;
-    errorMessage.value = null;
-    Get.offAllNamed(AppRoutes.login);
+    // Cegah pemanggilan logout ganda saat beberapa request bersamaan terkena 401.
+    if (_isLoggingOut) return;
+    _isLoggingOut = true;
+    try {
+      await _storage.clear();
+      user.value = null;
+      errorMessage.value = null;
 
-    if (sessionExpired) {
-      _showFeedbackSnackbar(
-        title: 'Sesi Berakhir',
-        message: 'Sesi berakhir, silakan masuk kembali.',
-        isError: true,
-      );
+      // Bersihkan state catatan dan scan agar data akun sebelumnya tidak terbawa.
+      if (Get.isRegistered<NoteController>()) {
+        await Get.delete<NoteController>();
+      }
+      if (Get.isRegistered<ScanController>()) {
+        await Get.delete<ScanController>();
+      }
+
+      Get.offAllNamed(AppRoutes.login);
+
+      if (sessionExpired) {
+        _showFeedbackSnackbar(
+          title: 'Sesi Berakhir',
+          message: 'Sesi berakhir, silakan masuk kembali.',
+          isError: true,
+        );
+      }
+    } finally {
+      _isLoggingOut = false;
     }
   }
 

@@ -104,8 +104,12 @@ class DioApiService implements ApiService {
   DioApiService({
     Dio? dio,
     GetStorage? storage,
+    String? Function()? tokenReader,
     this.onUnauthorized,
-  })  : _storage = storage ?? GetStorage(),
+  })  : _tokenReader = _buildTokenReader(
+          storage: storage,
+          tokenReader: tokenReader,
+        ),
         _dio = dio ??
             Dio(
               BaseOptions(
@@ -122,7 +126,7 @@ class DioApiService implements ApiService {
           // Sisipkan token JWT pada endpoint selain register/login.
           final isAuthRoute = options.path.startsWith('/api/auth/');
           if (!isAuthRoute) {
-            final token = _storage.read<String>(AppConstants.tokenStorageKey);
+            final token = _tokenReader();
             if (token != null && token.isNotEmpty) {
               options.headers['Authorization'] = 'Bearer $token';
             }
@@ -141,8 +145,17 @@ class DioApiService implements ApiService {
   }
 
   final Dio _dio;
-  final GetStorage _storage;
+  final String? Function() _tokenReader;
   final void Function()? onUnauthorized;
+
+  static String? Function() _buildTokenReader({
+    GetStorage? storage,
+    String? Function()? tokenReader,
+  }) {
+    if (tokenReader != null) return tokenReader;
+    final box = storage ?? GetStorage();
+    return () => box.read<String>(AppConstants.tokenStorageKey);
+  }
 
   @override
   Future<AuthResponse> register({
@@ -187,11 +200,12 @@ class DioApiService implements ApiService {
   @override
   Future<ScanResult> scanImage(File imageFile) async {
     try {
-      final fileName = imageFile.path.split(Platform.pathSeparator).last;
+      final fileName = imageFile.path.split(RegExp(r'[\\/]')).last;
       final formData = FormData.fromMap({
         'image': await MultipartFile.fromFile(
           imageFile.path,
           filename: fileName,
+          contentType: _detectImageMediaType(fileName),
         ),
       });
 
@@ -207,6 +221,15 @@ class DioApiService implements ApiService {
     } on DioException catch (e) {
       throw _mapDioException(e);
     }
+  }
+
+  /// Menentukan tipe MIME JPEG/PNG agar diterima validasi Content-Type backend.
+  DioMediaType _detectImageMediaType(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) {
+      return DioMediaType('image', 'png');
+    }
+    return DioMediaType('image', 'jpeg');
   }
 
   @override
@@ -303,8 +326,11 @@ class DioApiService implements ApiService {
     final serverMessage = _extractServerError(e.response?.data);
 
     if (statusCode == 401) {
-      if (e.requestOptions.path == '/api/auth/login' && serverMessage != null) {
-        return ApiException(serverMessage, statusCode: statusCode);
+      if (e.requestOptions.path == '/api/auth/login') {
+        return ApiException(
+          serverMessage ?? 'Email atau password salah.',
+          statusCode: statusCode,
+        );
       }
       return const ApiException(
         'Sesi berakhir, silakan masuk kembali.',
@@ -342,9 +368,9 @@ class DioApiService implements ApiService {
       );
     }
     if (statusCode != null && statusCode >= 500) {
-      return const ApiException(
+      return ApiException(
         'Server sedang bermasalah. Coba lagi nanti.',
-        statusCode: 500,
+        statusCode: statusCode,
       );
     }
 

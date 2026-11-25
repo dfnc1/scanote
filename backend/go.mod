@@ -1,3 +1,3 @@
-module github.com/dfnc1/Scanote/backend
+module backend
 
-go 1.22
+go 1.27
